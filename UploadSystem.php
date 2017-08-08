@@ -1,6 +1,8 @@
 <?php 
 class UploadSystem
 {
+	public $upload_toDB_string = null;
+
 	private $brp, $DB_conf = ['connection'=>null, 'table'=>null, 'column'=>null, 'type' => 'separate'], $upload_conf = ['create_thumb' => true, 'thumb_size' => 100];
 
 	public function __construct($config = null, $connection = null){
@@ -22,6 +24,7 @@ class UploadSystem
 
 	public function Upload($files = null, $to = null, $database_set = null, $connection_DB = null){
 		$is_insert_DB = false;
+		$multi_srcs = '';
 		if(is_a($connection_DB, 'mysqli')){
 			$this->DB_conf['connection']=$connection_DB;
 		}
@@ -29,7 +32,6 @@ class UploadSystem
 			$data = $this->get_data($database_set);	
 			$this->transferArrays($data, $this->DB_conf);
 			$is_insert_DB = true;		
-			$multi_srcs = '';
 		}	
 
 		if (is_string($files) && is_string($to) && !$to == null) {
@@ -67,21 +69,20 @@ class UploadSystem
 		        			throw new Exception("Error with creating thumb!", 1);
 		        		}
 			        }
-			        if ($is_insert_DB) {
-	        			if($this->DB_conf['type'] == "separate")
-		        		{
-		        			$this->UploadToDB($new_href);
-		        		}
-		        		else{
-		        			$multi_srcs = $new_href."!".$multi_srcs;
-		        			echo $multi_srcs."<br>";
-		        		}
+			        if ($is_insert_DB && $this->DB_conf['type'] == "separate") {
+		        		$this->UploadToDB($new_href);
 	        		}
+        			$multi_srcs = $new_href."!".$multi_srcs;
+        			echo $multi_srcs."<br>";
 
 		        }
 		        else{
 		        	throw new Exception("Failed to upload file!");
 		        }
+		    }
+		    $this->upload_toDB_string = $multi_srcs;
+		    if($is_insert_DB && $this->DB_conf['type'] == 'multiply'){
+		    	$this->UploadToDB();
 		    }
 		}
 		else{
@@ -89,12 +90,20 @@ class UploadSystem
 		}
 	}
 
-	private function UploadToDB($href)
+	private function UploadToDB($href = null)
 	{
-		echo $href;
+
+		if (!$href == null) {
+			$info_to_insert = $href;
+		}
+		else{
+			$info_to_insert = $this->upload_toDB_string;
+		}
+
+		
 	}
 
-	public function create_thumb($src, $to = null){
+	private function create_thumb($src, $to = null){
 		$desired_width= $this->upload_conf['thumb_size'];
 		if (!file_exists($src)) {
 			throw new Exception("Image to thumb not found!", 404);

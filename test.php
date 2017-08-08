@@ -1,5 +1,6 @@
 <form action="#" method="post" multipart="" enctype="multipart/form-data">
     <input type="file" name="img[]" multiple>
+    <input type="file" name="imgs_second[]" multiple>
     <input type="submit" name="upload_btn">
 </form>
 
@@ -9,9 +10,11 @@ if (isset($_POST['upload_btn'])) {
 	$img = $_FILES['img'];
 	include "UploadSystem.php";
 	include "../../crd-version2/config.php";
-	$test = new UploadSystem(['create_thumb'=>true, 'thumb_size'=>500]);
-	$test->setConnection($connection);
-	$test->Upload($img, "uploads/", "table: gallery, column: href, type: multiple");
+	$test = new UploadSystem(['create_thumb'=>false]);
+	$test->Upload($img, "uploads/");
+	echo $test->upload_toDB_string. "<br>";
+	$test->Upload($_FILES['imgs_second'], "./");
+	echo $test->upload_toDB_string;
 	// function reArrayFiles($file)
 	// {
 	//     $file_ary = array();

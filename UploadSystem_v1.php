@@ -1,50 +1,37 @@
 <?php 
 class UploadSystem
 {
-	private $brp, $DB_cconf = ['connection'=>null, 'table'=>null, 'column'=>null, 'type' => 'separate'], $upload_conf = ['create_thumb' => true];
+	public $upload_toDB_string = null;
 
-	public function __construct($createT = null, $c = null){
-		if (is_bool($createT)) {
-			$this->upload_conf['create_thumb'] = $createT;
-		}
-		if(is_a($c, 'mysqli')){
-			$this->DB_conf['connection']=$c;
+	private $brp, $DB_conf = ['connection'=>null, 'table'=>null, 'column'=>null, 'type' => 'separate'], $upload_conf = ['create_thumb' => true, 'thumb_size' => 100];
+
+	public function __construct($config = null, $connection = null){
+		$config_data = $this->get_data($config);
+		$this->transferArrays($config_data, $this->upload_conf, false);
+		if(is_a($connection, 'mysqli')){
+			$this->DB_conf['connection']=$connection;
 		}
 	}
 
 	public function setConnection($c){
-		if(is_a($c, 'mysqli')){
-			$this->DB_conf['connection']=$c;
+		if (is_a($c, 'mysqli')) {
+			$this->DB_conf['connection'] = $c;
 		}
-	}☺
+		else{
+			throw new Exception('Invalid type of connection!', 1);
+		}
+	}
 
 	public function Upload($files = null, $to = null, $database_set = null, $connection_DB = null){
 		$is_insert_DB = false;
+		$multi_srcs = '';
 		if(is_a($connection_DB, 'mysqli')){
 			$this->DB_conf['connection']=$connection_DB;
 		}
 		if (!$database_set == null) {
-			if(is_string($database_set))
-			{
-				$data = $this->get_data($database_set);	
-			}
-			else if(is_array($database_set))
-			{
-				$data = $database_set;
-			}
-			else{
-				throw new Exception("Invalid argument (must be string or array)!");
-			}
-			foreach ($this->DB_conf as $key => $property) {
-				if(isset($data[$key])){
-					$this->DB_conf[$key] = $data[$key];	
-				}
-				else if($this->DB_conf[$key] == null){
-					throw new Exception("Missing argument ".$key."!");
-				}
-			}
+			$data = $this->get_data($database_set);	
+			$this->transferArrays($data, $this->DB_conf);
 			$is_insert_DB = true;		
-			$multi_srcs = '';
 		}	
 
 		if (is_string($files) && is_string($to) && !$to == null) {
@@ -82,21 +69,20 @@ class UploadSystem
 		        			throw new Exception("Error with creating thumb!", 1);
 		        		}
 			        }
-			        if ($is_insert_DB) {
-	        			if($this->DB_conf['type'] == "separate")
-		        		{
-		        			$this->UploadToDB($new_href);
-		        		}
-		        		else{
-		        			$multi_srcs = $new_href."!".$multi_srcs;
-		        			echo $multi_srcs."<br>";
-		        		}
+			        if ($is_insert_DB && $this->DB_conf['type'] == "separate") {
+		        		$this->UploadToDB($new_href);
 	        		}
+        			$multi_srcs = $new_href."!".$multi_srcs;
+        			echo $multi_srcs."<br>";
 
 		        }
 		        else{
 		        	throw new Exception("Failed to upload file!");
 		        }
+		    }
+		    $this->upload_toDB_string = $multi_srcs;
+		    if($is_insert_DB && $this->DB_conf['type'] == 'multiply'){
+		    	$this->UploadToDB();
 		    }
 		}
 		else{
@@ -109,7 +95,8 @@ class UploadSystem
 		echo $href;
 	}
 
-	public function create_thumb($src,$desired_width=500, $to = null){
+	private function create_thumb($src, $to = null){
+		$desired_width= $this->upload_conf['thumb_size'];
 		if (!file_exists($src)) {
 			throw new Exception("Image to thumb not found!", 404);
 		}
@@ -139,14 +126,25 @@ class UploadSystem
 		};
 	}
 
-	private function get_data($str){
-		$data = [];
-		$data_str = explode(",", $str);
-		for ($i=0; $i < count($data_str); $i++) { 
-			$current_value = explode(":", $data_str[$i]);
-			$data[trim($current_value[0])] = $current_value[1];	
+	private function get_data($info){
+		if(is_string($info))
+		{
+			$data = [];
+			$data_str = explode(",", $info);
+			for ($i=0; $i < count($data_str); $i++) { 
+				$current_value = explode(":", $data_str[$i]);
+				$data[trim($current_value[0])] = $current_value[1];	
+			}
+			return $data;;	
 		}
-		return $data;
+		else if(is_array($info))
+		{
+			return $info;
+		}
+		else{
+			throw new Exception("Invalid type of data!");
+		}
+		
 	}
 
 	private function reArrayFiles($file)
@@ -163,6 +161,17 @@ class UploadSystem
 	        }
 	    }
 	    return $file_ary;
+	}
+
+	private function transferArrays($arrA, $arrB, $throw = true){
+		foreach ($arrB as $key => $property) {
+			if(isset($arrA[$key])){
+				$arrB[$key] = $arrA[$key];	
+			}
+			else if($arrB[$key] == null && $throw){
+				throw new Exception("Missing argument ".$key."!");
+			}
+		}
 	}
 
 }
