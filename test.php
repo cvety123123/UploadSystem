@@ -9,9 +9,9 @@ if (isset($_POST['upload_btn'])) {
 	$img = $_FILES['img'];
 	include "UploadSystem.php";
 	include "../../crd-version2/config.php";
-	$test = new UploadSystem();
-	$test->Upload($img, "uploads/");
-
+	$test = new UploadSystem(['create_thumb'=>true, 'thumb_size'=>500]);
+	$test->setConnection($connection);
+	$test->Upload($img, "uploads/", "table: gallery, column: href, type: multiple");
 	// function reArrayFiles($file)
 	// {
 	//     $file_ary = array();

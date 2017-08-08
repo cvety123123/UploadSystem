@@ -1,26 +1,43 @@
 <?php 
-include "File.php";
 class UploadSystem
 {
-	public $connection;
-	private $brp, $DB_conf = ['connection'=>null, 'table'=>null, 'column'=>null, 'type' => 'separate'];
+	private $brp, $DB_conf = ['connection'=>null, 'table'=>null, 'column'=>null, 'type' => 'separate'], $upload_conf = ['create_thumb' => true, 'thumb_size' => 100];
 
-	public function __construct($c = null){
-		if(is_a($c, 'mysqli')){
-			$this->DB_conf['connection']=$c;
+	public function __construct($config = null, $connection = null){
+		$config_data = $this->get_data($config);
+		$this->transferArrays($config_data, $this->upload_conf, false);
+		if(is_a($connection, 'mysqli')){
+			$this->DB_conf['connection']=$connection;
+		}
+	}
+
+	public function setConnection($c){
+		if (is_a($c, 'mysqli')) {
+			$this->DB_conf['connection'] = $c;
+		}
+		else{
+			throw new Exception('Invalid type of connection!', 1);
 		}
 	}
 
 	public function Upload($files = null, $to = null, $database_set = null, $connection_DB = null){
+		$is_insert_DB = false;
+		if(is_a($connection_DB, 'mysqli')){
+			$this->DB_conf['connection']=$connection_DB;
+		}
+		if (!$database_set == null) {
+			$data = $this->get_data($database_set);	
+			$this->transferArrays($data, $this->DB_conf);
+			$is_insert_DB = true;		
+			$multi_srcs = '';
+		}	
+
 		if (is_string($files) && is_string($to) && !$to == null) {
 		}
 		else if (is_array($files) && !empty($files) && !$to == null && is_dir($to)) {
 		    $file_desc = $this->reArrayFiles($files);
-		    
-		    print_r($file_desc);
 		    foreach($file_desc as $k=>$file)
 		    {
-		    	$create_thumb = null;
 		    	if ($file['type'] == 'image/png' || $file['type'] == 'image/jpeg') {
 		    		switch ($file['type']) {
 			    		case 'image/png':
@@ -34,7 +51,8 @@ class UploadSystem
 			    			break;
 			    	}
 		    		$newname = date('YmdHis',time()).mt_rand().$extension;
-		    		$create_thumb = true;
+		    		$create_thumb = $this->upload_conf['create_thumb'];
+		    		echo $create_thumb;
 		    	}
 		    	else{
 		    		$newname = $file['name'];
@@ -44,37 +62,22 @@ class UploadSystem
 		        if(move_uploaded_file($file['tmp_name'], $new_href))
 		        {
 		        	if ($create_thumb) {
-		        		$this->create_thumb($new_href);	
+		        		if(!$this->create_thumb($new_href))
+		        		{
+		        			throw new Exception("Error with creating thumb!", 1);
+		        		}
 			        }
-			        if(is_a($connection_DB, 'mysqli')){
-						$this->DB_conf['connection']=$connection_DB;
-					}
-	        		if (!$database_set == null) {
-	        			if(is_string($database_set))
-	        			{
-	        				$data = $this->get_data($database_set);	
-	        			}
-	        			else if(is_array($database_set))
-        				{
-        					$data = $database_set;
-        				}
-        				else{
-        					throw new Exception("Invalid argument (must be string or array)!");
-        				}
-						foreach ($this->DB_conf as $key => $property) {
-							echo $property;
-							if(isset($data[$key])){
-								if($property == null)
-								{
-									$this->DB_conf[$key] = $data[$key];	
-								}
-								else{
-									throw new Exception("Missing argument ".$key."!");
-								} 
-							}
-							
-						}
-					}
+			        if ($is_insert_DB) {
+	        			if($this->DB_conf['type'] == "separate")
+		        		{
+		        			$this->UploadToDB($new_href);
+		        		}
+		        		else{
+		        			$multi_srcs = $new_href."!".$multi_srcs;
+		        			echo $multi_srcs."<br>";
+		        		}
+	        		}
+
 		        }
 		        else{
 		        	throw new Exception("Failed to upload file!");
@@ -86,33 +89,13 @@ class UploadSystem
 		}
 	}
 
-	private function UploadToDB($DB_conf = null, $href)
+	private function UploadToDB($href)
 	{
-		if (!$this->DB_conf['connection']==null) {
-			if(!$this->DB_conf['connection'] == null && !$this->DB_conf['table']==null && !$this->DB_conf['column']==null){
-			}
-			else if (is_string($DB_conf)){
-				$data = $this->get_data($DB_conf);
-				if (isset($data['table']) && isset($data['column'])) {
-					$this->DB_conf['table'] = $data['table'];
-					$this->DB_conf['column'] = $data['column'];
-				}
-				else{
-					throw new Exception("The unexepted or missing parameter in DB_conf!", 1);
-				}
-			}
-			else{
-				throw new Exception("Database table and column not set!", 1);
-			}
-
-			if(!$this->DB_conf['connection']->query('INSERT INTO '.$this->DB_conf['table'].' ('.$this->DB_conf['column'].') values ("'.$href.'")'))
-			{
-				throw new Exception($this->DB_conf['connection']->error, 1);
-			}
-		}
+		echo $href;
 	}
 
-	public static function create_thumb($src,$desired_width=100, $to = null){
+	public function create_thumb($src, $to = null){
+		$desired_width= $this->upload_conf['thumb_size'];
 		if (!file_exists($src)) {
 			throw new Exception("Image to thumb not found!", 404);
 		}
@@ -137,17 +120,30 @@ class UploadSystem
 		$virtual_image = imagecreatetruecolor($desired_width, $desired_height);
 
 		imagecopyresampled($virtual_image, $source_image, 0, 0, 0, 0, $desired_width, $desired_height, $width, $height);
-		imagejpeg($virtual_image, $dest);
+		if(imagejpeg($virtual_image, $dest)){
+			return true;
+		};
 	}
 
-	public static function get_data($str){
-		$data = [];
-		$data_str = explode(",", $str);
-		for ($i=0; $i < count($data_str); $i++) { 
-			$current_value = explode(":", $data_str[$i]);
-			$data[trim($current_value[0])] = $current_value[1];	
+	private function get_data($info){
+		if(is_string($info))
+		{
+			$data = [];
+			$data_str = explode(",", $info);
+			for ($i=0; $i < count($data_str); $i++) { 
+				$current_value = explode(":", $data_str[$i]);
+				$data[trim($current_value[0])] = $current_value[1];	
+			}
+			return $data;;	
 		}
-		return $data;
+		else if(is_array($info))
+		{
+			return $info;
+		}
+		else{
+			throw new Exception("Invalid type of data!");
+		}
+		
 	}
 
 	private function reArrayFiles($file)
@@ -164,6 +160,17 @@ class UploadSystem
 	        }
 	    }
 	    return $file_ary;
+	}
+
+	private function transferArrays($arrA, $arrB, $throw = true){
+		foreach ($arrB as $key => $property) {
+			if(isset($arrA[$key])){
+				$arrB[$key] = $arrA[$key];	
+			}
+			else if($arrB[$key] == null && $throw){
+				throw new Exception("Missing argument ".$key."!");
+			}
+		}
 	}
 
 }
